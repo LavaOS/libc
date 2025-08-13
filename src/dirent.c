@@ -1,9 +1,9 @@
 #include <dirent.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <minos2errno.h>
 #include <minos/sysstd.h>
 struct DIR {
     struct dirent dirent;
@@ -19,7 +19,7 @@ DIR* opendir(const char* path) {
     }
     memset(dir, 0, sizeof(DIR));
     intptr_t e;
-    if((e = open(path, MODE_READ, O_DIRECTORY)) < 0) {
+    if((e = open(path, O_RDONLY | O_DIRECTORY)) < 0) {
         errno = _minos2errno(e);
         goto open_err;
     }
