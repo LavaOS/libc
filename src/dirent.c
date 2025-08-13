@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
-#include <minos2errno.h>
 #include <minos/sysstd.h>
 struct DIR {
     struct dirent dirent;
@@ -20,8 +19,8 @@ DIR* opendir(const char* path) {
     }
     memset(dir, 0, sizeof(DIR));
     intptr_t e;
-    if((e = open(path, O_RDONLY | O_DIRECTORY)) < 0) {
-        errno = _minos2errno(e);
+    if((e = open(path, MODE_READ, O_DIRECTORY)) < 0) {
+        errno = _status_to_errno(e);
         goto open_err;
     }
     dir->fd = e;
@@ -35,7 +34,7 @@ struct dirent* readdir(DIR *dir) {
     if(dir->left == 0) {
         intptr_t e = get_dir_entries(dir->fd, (DirEntry*)dir->buf, sizeof(dir->buf));
         if(e < 0) {
-            errno = _minos2errno(e);
+            errno = _status_to_errno(e);
             return NULL;
         }
         // We reached EOF
