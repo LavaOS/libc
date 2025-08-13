@@ -1,237 +1,72 @@
-#define NOB_STRIP_PREFIX
-#define NOB_IMPLEMENTATION
-#include "../../nob.h"
-static bool walk_directory(
-    File_Paths* dirs,
-    File_Paths* c_sources,
-    File_Paths* nasm_sources,
-    File_Paths* gen_sources,
-    const char* path
-) {
-    DIR *dir = opendir(path);
-    if(!dir) {
-        nob_log(NOB_ERROR, "Could not open directory %s: %s", path, strerror(errno));
-        return false;
-    }
-    errno = 0;
-    struct dirent *ent;
-    while((ent = readdir(dir))) {
-        if(*ent->d_name == '.') continue;
-        size_t temp = nob_temp_save();
-        const char* p = nob_temp_sprintf("%s/%s", path, ent->d_name); 
-        String_View sv = sv_from_cstr(p);
-        Nob_File_Type type = nob_get_file_type(p);
-        if(type == NOB_FILE_DIRECTORY) {
-            da_append(dirs, p);
-            if(!walk_directory(dirs, c_sources, nasm_sources, gen_sources, p)) {
-                closedir(dir);
-                return false;
-            }
-            continue;
-        }
-        if(sv_end_with(sv, ".gen.c")) {
-            nob_da_append(gen_sources, p);
-        } else if(sv_end_with(sv, ".c")) {
-            nob_da_append(c_sources, p);
-        } else if(sv_end_with(sv, ".nasm")) {
-            nob_da_append(nasm_sources, p);
-        } else {
-            nob_temp_rewind(temp);
-        }
-    }
-    closedir(dir);
-    return true;
-}
-
-#define cstr_rem_suffix(__src, suffix) (int)(strlen(__src) - strlen(suffix)), (__src)
-
-const char* inc_dirs[] = {
-    "shared/include", 
-    "src",
-    "vendor/limine",
-    "vendor/stb",
+#include <dirent.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+#include <assert.h>
+#include <minos2errno.h>
+#include <minos/sysstd.h>
+struct DIR {
+    struct dirent dirent;
+    int fd;
+    char buf[2048];
+    size_t left;
 };
-static void append_inc_dirs(Cmd* cmd) {
-    for(size_t i = 0; i < ARRAY_LEN(inc_dirs); ++i) {
-        cmd_append(cmd, "-I", inc_dirs[i]);
+DIR* opendir(const char* path) {
+    DIR *dir = malloc(sizeof(DIR));
+    if(!dir) {
+        errno = ENOMEM;
+        goto malloc_err;
     }
+    memset(dir, 0, sizeof(DIR));
+    intptr_t e;
+    if((e = open(path, O_RDONLY | O_DIRECTORY)) < 0) {
+        errno = _minos2errno(e);
+        goto open_err;
+    }
+    dir->fd = e;
+    return dir;
+open_err:
+    free(dir);
+malloc_err:
+    return NULL;
 }
-int main(int argc, char** argv) {
-    NOB_GO_REBUILD_URSELF(argc, argv);
-    char* cc = getenv("CC");
-    if(!cc) cc = "cc";
-    char* ld = getenv("LD");
-    if(!ld) ld = "ld";
-    char* bindir = getenv("BINDIR");
-    if(!bindir) bindir = "bin";
-    if(!nob_mkdir_if_not_exists_silent(bindir)) return 1;
-    if(!nob_mkdir_if_not_exists_silent(nob_temp_sprintf("%s/kernel", bindir))) return 1;
-    if(!nob_mkdir_if_not_exists_silent(nob_temp_sprintf("%s/iso", bindir))) return 1;
-    if(!nob_mkdir_if_not_exists_silent(nob_temp_sprintf("%s/shared", bindir))) return 1;
-    File_Paths dirs = { 0 };
-    File_Paths c_sources = { 0 };
-    File_Paths nasm_sources = { 0 };
-    File_Paths gen_sources = { 0 }; 
-
-    size_t src_dir = strlen("src/");
-    if(!walk_directory(&dirs, &c_sources, &nasm_sources, &gen_sources, "src")) return 1;
-    File_Paths objs = { 0 };
-    String_Builder stb = { 0 };
-    File_Paths pathb = { 0 };
-    for(size_t i = 0; i < dirs.count; ++i) {
-        size_t temp = nob_temp_save();
-        const char* dir = nob_temp_sprintf("%s/kernel/%s", bindir, dirs.items[i] + src_dir);
-        if(!nob_mkdir_if_not_exists_silent(dir)) return 1;
-        nob_temp_rewind(temp);
-    }
-    Cmd cmd = { 0 };
-    for(size_t i = 0; i < gen_sources.count; ++i) {
-        const char* src = gen_sources.items[i];
-        const char* out = temp_sprintf("%s/kernel/%.*s", bindir, cstr_rem_suffix(src + src_dir, ".c"));
-        if(nob_c_needs_rebuild1(&stb, &pathb, out, src)) {
-            cmd_append(&cmd, NOB_REBUILD_URSELF(out, src), "-O1", "-MMD");
-            append_inc_dirs(&cmd);
-            if(!cmd_run_sync_and_reset(&cmd)) return 1;
+struct dirent* readdir(DIR *dir) {
+    if(dir->left == 0) {
+        intptr_t e = get_dir_entries(dir->fd, (DirEntry*)dir->buf, sizeof(dir->buf));
+        if(e < 0) {
+            errno = _minos2errno(e);
+            return NULL;
         }
-        const char* gen_file = temp_sprintf("%.*s", cstr_rem_suffix(src, ".gen.c"));
-        if(!nob_needs_rebuild1(gen_file, src)) continue;
-        nob_log(NOB_INFO, "Regenerating %s", gen_file);
-        Fd fd = fd_open_for_write(gen_file);
-        if(fd == -NOB_INVALID_FD) {
-            nob_log(NOB_ERROR, "Failed to open %s", gen_file);
-        }
-        cmd_append(&cmd, out);
-        // TODO: run in that directory
-        if(!cmd_run_sync_redirect_and_reset(&cmd, (Cmd_Redirect){ .fdout = &fd })) {
-            nob_log(NOB_ERROR, "FAILED to generate %s (using %s)", gen_file, src);
-            fd_close(fd);
-        }
-        fd_close(fd);
+        // We reached EOF
+        if(e == 0) return NULL;
+        assert(e <= sizeof(dir->buf));
+        dir->left = e;
+        return readdir(dir);
     }
-
-    for(size_t i = 0; i < nasm_sources.count; ++i) {
-        const char* src = nasm_sources.items[i];
-        const char* out = nob_temp_sprintf("%s/kernel/%s.o", bindir, src + src_dir);
-        const char* md = nob_temp_sprintf("%s/kernel/%s.d", bindir, src + src_dir);
-        da_append(&objs, out);
-        if(nob_c_needs_rebuild1(&stb, &pathb, out, src) == 0) continue;
-        const char* include = nob_temp_sprintf("%.*s", (int)(nob_path_name(src)-src), src);
-        cmd_append(&cmd, "nasm");
-        cmd_append(&cmd, "-I", include); 
-        cmd_append(&cmd, "-f", "elf64");
-        cmd_append(&cmd, "-MD", md);
-        cmd_append(&cmd, src);
-        cmd_append(&cmd, "-o", out);
-        if(!nob_cmd_run_sync_and_reset(&cmd)) return 1;
+    DirEntry* entry = (DirEntry*)dir->buf;
+    assert(entry->size <= dir->left);
+    if(entry->size < sizeof(DirEntry)) {
+        errno = EINVAL;
+        return NULL;
     }
-    for(size_t i = 0; i < c_sources.count; ++i) {
-        const char* src = c_sources.items[i];
-        const char* out = nob_temp_sprintf("%s/kernel/%s.o", bindir, src + src_dir);
-        da_append(&objs, out);
-        if(!nob_c_needs_rebuild1(&stb, &pathb, out, src)) continue;
-        cmd_append(&cmd, cc);
-        cmd_append(&cmd, 
-            "-g",
-            "-nostdlib",
-            "-march=x86-64",
-            "-ffreestanding",
-            "-static",
-            "-Werror", "-Wno-unused-function",
-            "-Wno-address-of-packed-member", 
-            "-Wall", 
-            "-fno-stack-protector", 
-            "-fcf-protection=none", 
-            "-O2",
-            "-MMD",
-            "-MP",
-            /*"-fomit-frame-pointer", "-fno-builtin", */
-            "-mgeneral-regs-only", 
-            "-mno-mmx",
-            "-mno-sse", "-mno-sse2",
-            "-mno-3dnow",
-            "-fPIC",
-        );
-        append_inc_dirs(&cmd);
-        cmd_append(&cmd, "-c", src, "-o", out);
-        if(!nob_cmd_run_sync_and_reset(&cmd)) {
-            size_t temp = nob_temp_save();
-            char* str = nob_temp_strdup(out);
-            size_t str_len = strlen(str);
-            assert(str_len);
-            str[str_len-1] = 'd';
-            nob_delete_file(str);
-            nob_temp_rewind(temp);
-            return 1;
-        }
+    // Entry with a name thats way too large
+    if(entry->size - sizeof(DirEntry) > 256) {
+        errno = ENOBUFS;
+        return NULL;
     }
-    dirs.count = 0;
-    c_sources.count = 0;
-    nasm_sources.count = 0;
-    gen_sources.count = 0;
-    src_dir = strlen("shared/src/");
-    if(!walk_directory(&dirs, &c_sources, &nasm_sources, &gen_sources, "shared/src")) return 1;
-    assert(dirs.count == 0 && "Update shared");
-    assert(gen_sources.count == 0 && "Update shared");
-    assert(nasm_sources.count == 0 && "Update shared");
-    for(size_t i = 0; i < c_sources.count; ++i) {
-        const char* src = c_sources.items[i];
-        const char* out = nob_temp_sprintf("%s/shared/%.*s.o", bindir, cstr_rem_suffix(src + src_dir, ".c"));
-        da_append(&objs, out);
-        if(!nob_c_needs_rebuild1(&stb, &pathb, out, src)) continue;
-        cmd_append(&cmd, cc);
-        cmd_append(&cmd, 
-            "-g",
-            "-nostdlib",
-            "-march=x86-64",
-            "-ffreestanding",
-            "-static",
-            "-Werror", "-Wno-unused-function",
-            "-Wno-address-of-packed-member", 
-            "-Wall", 
-            "-fno-stack-protector", 
-            "-fcf-protection=none", 
-            "-O2",
-            "-MMD",
-            "-MP",
-            /*"-fomit-frame-pointer", "-fno-builtin", */
-            "-mgeneral-regs-only", 
-            "-mno-mmx",
-            "-mno-sse", "-mno-sse2",
-            "-mno-3dnow",
-            "-fPIC",
-            "-I", "shared/include",
-            "-Isrc",
-        );
-        cmd_append(&cmd, "-I", "vendor/limine");
-        cmd_append(&cmd, "-I", "vendor/stb");
-        cmd_append(&cmd, "-c", src, "-o", out);
-        if(!nob_cmd_run_sync_and_reset(&cmd)) {
-            size_t temp = nob_temp_save();
-            char* str = nob_temp_strdup(out);
-            size_t str_len = strlen(str);
-            assert(str_len);
-            str[str_len-1] = 'd';
-            nob_delete_file(str);
-            nob_temp_rewind(temp);
-            return 1;
-        }
-    }
-    const char* kernel = nob_temp_sprintf("%s/iso/kernel", bindir);
-    if(nob_needs_rebuild(kernel, objs.items, objs.count)) {
-        cmd_append(&cmd, ld, "-g", "-T", "linker.ld", "-o", kernel);
-        da_append_many(&cmd, objs.items, objs.count);
-        if(!nob_cmd_run_sync_and_reset(&cmd)) return 1;
-    }
-    const char* iso_files[] = {
-        "vendor/limine/limine-bios.sys", 
-        "vendor/limine/limine-bios-cd.bin",
-        "vendor/limine/limine-uefi-cd.bin",
-        "limine.cfg"
-    };
-    for(size_t i = 0; i < ARRAY_LEN(iso_files); ++i) {
-        size_t temp = nob_temp_save();
-        const char* out = nob_temp_sprintf("%s/iso/%s", bindir, path_name(iso_files[i]));
-        if(nob_needs_rebuild1(out, iso_files[i]) && !nob_copy_file(iso_files[i], out)) return 1;
-        nob_temp_rewind(temp);
-    }
+    dir->dirent.d_ino = entry->inodeid;
+    // TODO: d_type field using entry->kind
+    dir->dirent.d_type = DT_UNKNOWN;
+    memcpy(dir->dirent.d_name, entry->name, entry->size - sizeof(DirEntry));
+    dir->dirent.d_name[entry->size-sizeof(DirEntry)] = '\0';
+    dir->left -= entry->size;
+    memmove(dir->buf, dir->buf + entry->size, dir->left);
+    return &dir->dirent;
+}
+// TODO: actual error. Not that it matters but yeah
+int closedir(DIR *dir) {
+    if(!dir) return -1;
+    close(dir->fd);
+    free(dir);
+    return 0;
 }
