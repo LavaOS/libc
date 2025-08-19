@@ -104,10 +104,7 @@ int main(int argc, char** argv) {
             "-mno-3dnow",
             "-fPIC",
             "-I", nob_temp_sprintf("%s/shared/include", kroot),
-            "-I", "include",
-            "-W",
-            "-z",
-            "noexecstack"
+            "-I", "include"
         );
         cmd_append(&cmd, "-c", src, "-o", out);
         if(!nob_cmd_run_sync_and_reset(&cmd)) {
