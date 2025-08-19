@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
             "-fPIC",
             "-I", nob_temp_sprintf("%s/shared/include", kroot),
             "-I", "include",
-            "-Wl",
+            "-W",
             "-z",
             "noexecstack"
         );
