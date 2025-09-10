@@ -1,3 +1,5 @@
+#include <unistd.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -108,15 +110,21 @@ static unsigned long long load_int_prefix(const char* fmt, char** end, va_list l
 static const char hex_upper_digits[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 static const char hex_lower_digits[] = {'0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'};
 static size_t dtostr(char* buf, double value) {
-    size_t at = lltostr(buf, (long long)value, hex_lower_digits, 10);
+    size_t at = 0;
+    if(value < 0) {
+        buf[at++] = '-';
+        value = -value;
+    }
+    at += lltostr(buf + at, (long long)value, hex_lower_digits, 10);
     const size_t prec = 4;
     value = value - (double)((long long)value);
     if(value != 0) {
         buf[at++] = '.';
         for(size_t i = 0; i < prec; ++i) {
-            value *= 10;
+            value *= 10.0f;
+            buf[at++] = ((long long)value) + '0';
+            value -= (double)(long long)value;
         }
-        at += lltostr(buf + at, (long long)value, hex_lower_digits, 10);
     }
     return at;
 }
@@ -159,9 +167,8 @@ static ssize_t print_base(void* user, PrintWriteFunc func, const char* fmt, va_l
         }
         char ibuf[30];
 
-        // TODO: use precision
+        int prec = -1;
         if(*fmt == '.') {
-            int prec = 0;
             fmt++;
             if(*fmt == '*') {
                 prec = va_arg(list, int);
@@ -207,11 +214,15 @@ static ssize_t print_base(void* user, PrintWriteFunc func, const char* fmt, va_l
                 value >>= 4;
             }
             break;
-        case 's':
+        case 's': {
             bytes = va_arg(list, const char*);
             if(!bytes) bytes = "nil";
-            count = strlen(bytes);
-            break;
+            const char* str = bytes;
+
+            while(str[count] && count < (size_t)prec) {
+                count++;
+            }
+        } break;
         case 'f':
         case 'g':
             count = dtostr(ibuf, va_arg(list, double));
@@ -308,10 +319,10 @@ static int parse_mode_to_oflags(const char* mode_str) {
     while(mode_str[0]) {
         switch(mode_str[0]) {
         case 'r':
-            oflags |= O_READ;
+            oflags |= O_RDONLY;
             break;
         case 'w':
-            oflags |= O_WRITE | O_CREAT;
+            oflags |= O_WRONLY | O_CREAT;
             break;
         case 'b':
             break;
@@ -320,7 +331,7 @@ static int parse_mode_to_oflags(const char* mode_str) {
         }
         mode_str++;
     }
-    if((!(oflags & O_READ)) && (oflags & O_WRITE)) oflags |= O_TRUNC;
+    if((!(oflags & O_RDONLY)) && (oflags & O_WRONLY)) oflags |= O_TRUNC;
     return oflags;
 
 }
@@ -404,7 +415,7 @@ int fclose(FILE* f) {
     return 0;
 }
 int fseek(FILE* f, long offset, int origin) {
-    if(f->oflags & O_WRITE) {
+    if(f->oflags & O_WRONLY) {
         int e = fflush(f);
         if(e < 0) return e;
     } else {
@@ -599,7 +610,7 @@ size_t fwrite(const void* restrict buffer, size_t size, size_t count, FILE* rest
     return e/size;
 }
 int fflush(FILE* f) {
-    if(!(f->oflags & O_WRITE)) return 0;
+    if(!(f->oflags & O_WRONLY)) return 0;
     if(f->buf_len == 0) return 0;
     ssize_t n = fwrite_uncached_exact(f, f->buf, f->buf_len);
     if(n < 0) return n;
@@ -750,15 +761,21 @@ int feof(FILE* f) {
     return f->error == EOF;
 }
 #include <assert.h>
+static void close_std_streams(void) {
+    fflush(stdout);
+    fflush(stdin);
+    fflush(stderr);
+}
 void _libc_init_streams(void) {
-    stdout = fdopen(STDOUT_FILENO, "wb");
     stdin  = fdopen( STDIN_FILENO, "rb");
+    stdout = fdopen(STDOUT_FILENO, "wb");
     stderr = fdopen(STDERR_FILENO, "wb");
     stdout->buf_mode = _IOLBF;
     stderr->buf_mode = _IONBF;
     assert(stdout);
     assert(stdin);
     assert(stderr);
+    atexit(close_std_streams);
 }
 
 void clearerr(FILE* f) {

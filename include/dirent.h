@@ -1,6 +1,5 @@
 #pragma once
-#include <minos/fsdefs.h>
-typedef inodeid_t ino_t;
+#include <minos/stat.h>
 enum {
     DT_UNKNOWN,
     DT_REG,
@@ -19,3 +18,5 @@ typedef struct DIR DIR;
 DIR* opendir(const char* name);
 struct dirent* readdir(DIR *dir);
 int closedir(DIR *dir);
+// Specific to MinOS
+long getdents(unsigned int fd, void* entries, unsigned int count);
