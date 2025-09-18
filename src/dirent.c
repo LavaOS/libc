@@ -6,7 +6,9 @@
 #include <minos2errno.h>
 #include <minos/sysstd.h>
 #include <fcntl.h>
-#include <dirent.h>
+#include <minos/syscall.h>
+#include <minos/syscodes.h>
+
 struct DIR {
     struct dirent dirent;
     int fd;
