@@ -197,13 +197,20 @@ void free(void* addr) {
     for(size_t i = 0; i < _LIBC_INTERNAL_HEAPS_MAX; ++i) {
         if(!_libc_internal_heaps[i].addr) continue;
         _LibcInternalHeap* heap = &_libc_internal_heaps[i];
-        if(heap->addr <= addr && (char*)addr < (char*)heap->addr+heap->size) {
-            libc_heap_deallocate(heap, addr);
+        if(addr > heap->addr &&
+           (char*)addr < (char*)heap->addr + heap->size) {
+            for(_HeapNode* node = (_HeapNode*)heap->alloc_list.next;
+                &node->list != &heap->alloc_list;
+                node = (_HeapNode*)node->list.next) {
+                if(node->data == addr) {
+                    libc_heap_deallocate(heap, addr);
+                    return;
+                }
+            }
             return;
         }
     }
-    // Reached limit
-    assert(false && "Invalid address to free");
+    return;
 }
 #include <string.h>
 int atoi(const char *str) {
