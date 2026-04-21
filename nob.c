@@ -87,7 +87,6 @@ int main(int argc, char** argv) {
         if(!nob_c_needs_rebuild1(&stb, &pathb, out, src)) continue;
         cmd_append(&cmd, cc);
         cmd_append(&cmd,
-            "-g",
             "-nostdlib",
             "-march=x86-64",
             "-ffreestanding",
@@ -143,7 +142,6 @@ int main(int argc, char** argv) {
         if(!nob_c_needs_rebuild1(&stb, &pathb, out, src)) continue;
         cmd_append(&cmd, cc);
         cmd_append(&cmd,
-            "-g",
             "-nostdlib",
             "-march=x86-64",
             "-ffreestanding",
