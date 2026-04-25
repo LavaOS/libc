@@ -39,12 +39,12 @@ double frexp(double x, int* expptr) {
 }
 
 double sin(double x) {
-    fprintf(stderr, "TODO: sin(double x) is a stub");
-    exit(1);
+    int deg = (int)(x * 57.29577951308232) % 360;
+    if (deg < 0) deg += 360;
+    return sin_table[deg] / 1000.0;
 }
 double cos(double x) {
-    fprintf(stderr, "TODO: cos(double x) is a stub");
-    exit(1);
+    return sin(x + 1.5707963267948966); // + PI/2
 }
 double tan(double x) {
     fprintf(stderr, "TODO: tan(double x) is a stub");
@@ -103,10 +103,9 @@ double atan2(double y, double x) {
     exit(1);
 }
 float sinf(float f) {
-    asm("fsin" : "+t"(f));
-    return f;
+    return (float)sin((double)f);
 }
+
 float cosf(float f) {
-    asm("fcos" : "+t"(f));
-    return f;
+    return (float)cos((double)f);
 }
