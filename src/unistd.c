@@ -52,23 +52,3 @@ int truncate(const char* path, off_t size) {
 int execve(const char* pathname, char *const* argv, char *const* envp) {
     syscall(syscall3, SYS_EXEC, pathname, argv, envp);
 }
-int dup2(int oldfd, int newfd) {
-    if (oldfd == newfd) return newfd;
-    close(newfd);
-    int tmpfd = dup(oldfd);
-    if (tmpfd < 0) return -1;
-    if (tmpfd == newfd) return newfd;
-    close(tmpfd);
-    for (int i = 0; i < 256; i++) {
-        int fd = dup(oldfd);
-        if (fd < 0) return -1;
-        if (fd == newfd) return newfd;
-        if (fd > newfd) {
-            close(fd);
-            errno = EBADF;
-            return -1;
-        }
-    }
-    errno = EMFILE;
-    return -1;
-}
