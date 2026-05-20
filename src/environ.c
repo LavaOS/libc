@@ -74,7 +74,9 @@ void _libc_init_environ(const char** envp) {
     if(!__environ_reserve(envc)) exit(1);
     for(size_t i = 0; i < envc; ++i) {
         char* env = strdup(envp[i]);
-        if(!env) exit(1);
+        if(!env) {
+            for(;;) asm("hlt");
+        }
         environ[__environ_size++] = env;
     }
 }
