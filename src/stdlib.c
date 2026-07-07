@@ -1,7 +1,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
-#include <sys/unistd.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <stdio.h>
+#include <minos/sysstd.h>
 #include "list_head.h"
 
 static void (*atexit_funcs[ATEXIT_MAX])(void);
@@ -333,7 +337,8 @@ int system(const char* command) {
     if(!command) return 1;
     pid_t pid = fork();
     if(pid == 0) {
-        execl("/sbin/lash", "-c", command, NULL);
+        const char* argv[] = { "lash", "-c", command, NULL };
+        execvp("/sbin/lash", (char*const*)argv);
         _exit(127);
     }
     if(pid < 0) return -1;
