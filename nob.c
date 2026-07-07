@@ -175,6 +175,7 @@ int main(int argc, char** argv) {
 
     // Link libc.so from all object files
     const char* libc_so = nob_temp_sprintf("%s/libc/libc.so", bindir);
+    const char* libc_dir = nob_temp_sprintf("%s/libc", bindir);
     {
         cmd_append(&cmd, cc);
         cmd_append(&cmd, "-shared", "-nostdlib", "-ffreestanding", "-fPIC");
@@ -184,7 +185,6 @@ int main(int argc, char** argv) {
 
         // Collect all libc .o files
         size_t temp = nob_temp_save();
-        const char* libc_dir = nob_temp_sprintf("%s/libc", bindir);
         DIR* d = opendir(libc_dir);
         if(!d) {
             nob_log(NOB_ERROR, "Failed to open %s", libc_dir);
