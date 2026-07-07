@@ -234,4 +234,11 @@ int main(int argc, char** argv) {
             nob_cmd_run_sync_and_reset(&cmd);
         }
     }
+
+    // Copy libc headers to initrd/include/
+    char* rootdir = getenv("ROOTDIR");
+    if(rootdir) {
+        cmd_append(&cmd, "cp", "-r", "include/.", temp_sprintf("%s/include/", rootdir));
+        nob_cmd_run_sync_and_reset(&cmd);
+    }
 }
