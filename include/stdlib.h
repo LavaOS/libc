@@ -18,6 +18,7 @@ void qsort(void* ptr, size_t count, size_t size, int (*comp)(const void*, const 
 int system(const char* command);
 void *bsearch(const void *key, const void *base, size_t nitems, size_t size, int (*compar)(const void *, const void *));
 char *mktemp(char *templat);
+int mkstemp(char *templat);
 char *realpath(const char *path, char *resolved_path);
 
 double strtod(const char* str, char** endptr);

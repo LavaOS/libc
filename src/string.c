@@ -191,3 +191,25 @@ char* strtok(char* s, const char* delim) {
     s[n] = '\0';
     return s;
 }
+
+char* strtok_r(char* str, const char* delim, char** saveptr) {
+    if(!str) str = *saveptr;
+    if(!str) return NULL;
+    str = str + strspn(str, delim);
+    size_t n = strcspn(str, delim);
+    if(n == 0) return NULL;
+    if(!str[n]) *saveptr = NULL;
+    else *saveptr = str + n + 1;
+    str[n] = '\0';
+    return str;
+}
+
+char* strndup(const char* s, size_t n) {
+    size_t len = strlen(s);
+    if(len > n) len = n;
+    char* res = malloc(len + 1);
+    if(!res) return NULL;
+    memcpy(res, s, len);
+    res[len] = '\0';
+    return res;
+}

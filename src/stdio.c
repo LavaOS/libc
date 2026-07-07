@@ -446,12 +446,13 @@ ssize_t ftell(FILE* f) {
     return e;
 }
 int rename(const char* old_filename, const char* new_filename) {
-    fprintf(stderr, "ERROR: Unimplemented `rename` (%s, %s)\n", old_filename, new_filename);
+    (void)old_filename;
+    (void)new_filename;
     return -1;
 }
 
 int remove(const char* path) {
-    fprintf(stderr, "ERROR: Unimplemented `remove` (%s)\n", path);
+    (void)path;
     return -1;
 }
 static ssize_t fread_uncached(FILE* f, void* buf, size_t len) {
@@ -781,8 +782,22 @@ void clearerr(FILE* f) {
     f->error = 0;
 }
 int ungetc(int chr, FILE* f) {
-    fprintf(stderr, "WARN: ungetc is a stub");
-    exit(1);
+    if(f->tmp) {
+        if(f->as.tmp.cursor > 0) {
+            f->as.tmp.cursor--;
+            f->as.tmp.data[f->as.tmp.cursor] = chr;
+            f->error = 0;
+            return chr;
+        }
+        return EOF;
+    }
+    f->buf_len = 0;
+    f->error = 0;
+    if(f->buf && BUFSIZ > 0) {
+        f->buf[0] = chr;
+        f->buf_len = 1;
+    }
+    return chr;
 }
 int setvbuf(FILE* f, char* buf, int mode, size_t size)  {
     assert(mode == _IOFBF || mode == _IOLBF || mode == _IONBF);
@@ -794,8 +809,12 @@ int setvbuf(FILE* f, char* buf, int mode, size_t size)  {
 }
 
 char *tmpnam(char *s) {
-    fprintf(stderr, "WARN: tmpnam is a stub");
-    exit(1);
+    static char buf[L_tmpnam];
+    if(!s) s = buf;
+    static unsigned int seed = 54321;
+    seed = seed * 1103515245 + 12345;
+    snprintf(s, L_tmpnam, "/tmp/tmp.%u", seed);
+    return s;
 }
 
 void rewind(FILE* f) {

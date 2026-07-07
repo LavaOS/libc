@@ -6,8 +6,17 @@ float fabs(float f) {
 #include <stdlib.h>
 #include <stdio.h>
 double pow(double x, double y) {
-    fprintf(stderr, "TODO: pow");
-    exit(1);
+    if(y == 0.0) return 1.0;
+    if(y == 1.0) return x;
+    double result = 1.0;
+    int neg = y < 0;
+    if(neg) y = -y;
+    while(y > 0) {
+        if((int)y & 1) result *= x;
+        x *= x;
+        y /= 2.0;
+    }
+    return neg ? 1.0 / result : result;
 }
 
 double ldexp(double x, int exponent) {
@@ -34,8 +43,12 @@ double fmod(double x, double y) {
 }
 
 double frexp(double x, int* expptr) {
-    fprintf(stderr, "TODO: frexp");
-    exit(1);
+    if(x == 0.0) { *expptr = 0; return 0.0; }
+    int exp = 0;
+    while(x >= 2.0) { x /= 2.0; exp++; }
+    while(x < 1.0)  { x *= 2.0; exp--; }
+    *expptr = exp;
+    return x;
 }
 
 double sin(double x) {
@@ -47,8 +60,40 @@ double cos(double x) {
     return sin(x + 1.5707963267948966); // + PI/2
 }
 double tan(double x) {
-    fprintf(stderr, "TODO: tan(double x) is a stub");
-    exit(1);
+    double c = cos(x);
+    if(c == 0.0) return 1e308;
+    return sin(x) / c;
+}
+double asin(double x) {
+    if(x < -1 || x > 1) return 0;
+    return atan2(x, sqrt(1.0 - x*x));
+}
+double acos(double x) {
+    if(x < -1 || x > 1) return 0;
+    return 3.14159265358979323846 / 2.0 - asin(x);
+}
+double atan(double x) {
+    return atan2(x, 1.0);
+}
+double atan2(double y, double x) {
+    if(x == 0 && y == 0) return 0;
+    double r = sqrt(x*x + y*y);
+    double cos_val = x / r;
+    double angle = acos(cos_val);
+    if(y < 0) angle = -angle;
+    return angle;
+}
+double sinh(double x) {
+    double e = exp(x);
+    return (e - 1.0/e) / 2.0;
+}
+double cosh(double x) {
+    double e = exp(x);
+    return (e + 1.0/e) / 2.0;
+}
+double tanh(double x) {
+    double e2 = exp(2*x);
+    return (e2 - 1) / (e2 + 1);
 }
 double asin(double x) {
     fprintf(stderr, "TODO: asin(double x) is a stub");
@@ -91,8 +136,48 @@ double exp(double x) {
     exit(1);
 }
 double sqrt(double x) {
-    fprintf(stderr, "TODO: sqrt(double x) is a stub");
-    exit(1);
+    if(x < 0) return -1;
+    if(x == 0) return 0;
+    double guess = x / 2.0;
+    for(int i = 0; i < 50; i++) {
+        guess = (guess + x / guess) / 2.0;
+    }
+    return guess;
+}
+double ceil(double x) {
+    int i = (int)x;
+    return x > 0 && x != (double)i ? i + 1.0 : i;
+}
+double exp(double x) {
+    if(x == 0) return 1.0;
+    double sum = 1.0;
+    double term = 1.0;
+    for(int i = 1; i < 30; i++) {
+        term *= x / i;
+        sum += term;
+    }
+    return sum;
+}
+double log(double x) {
+    if(x <= 0) return -1e308;
+    double result = 0;
+    int n = 0;
+    while(x > 2.0) { x /= 2.718281828459045; n++; }
+    while(x < 0.5) { x *= 2.718281828459045; n--; }
+    double y = (x - 1) / (x + 1);
+    double y2 = y * y;
+    double term = y;
+    for(int i = 1; i < 20; i++) {
+        result += term / (2 * i - 1);
+        term *= y2;
+    }
+    return result * 2.0 + n;
+}
+double log10(double x) {
+    return log(x) / 2.302585092994046;
+}
+double log2(double x) {
+    return log(x) / 0.6931471805599453;
 }
 double ceil(double x) {
     fprintf(stderr, "TODO: ceil(double x) is a stub");

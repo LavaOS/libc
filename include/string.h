@@ -27,3 +27,5 @@ static char* strcat(char *dest, const char *src) {
     return memcpy(dest+strlen(dest), src, strlen(src)+1);
 }
 char* strtok(char* s, const char* delim);
+char* strtok_r(char* str, const char* delim, char** saveptr);
+char* strndup(const char* s, size_t n);

@@ -173,6 +173,7 @@ void* malloc(size_t size) {
 }
 
 void* calloc(size_t elm, size_t size) {
+    if(elm != 0 && size > SIZE_MAX / elm) return NULL;
     void* buf = malloc(elm*size);
     if(buf) {
         memset(buf, 0, elm*size);
@@ -329,22 +330,83 @@ void qsort(void* ptr, size_t count, size_t size, int (*comp)(const void*, const 
 }
 
 int system(const char* command) {
-    fprintf(stderr, "system() is a stub\n");
-    exit(1);
+    if(!command) return 1;
+    pid_t pid = fork();
+    if(pid == 0) {
+        execl("/sbin/lash", "-c", command, NULL);
+        _exit(127);
+    }
+    if(pid < 0) return -1;
+    wait_pid(pid);
+    return 0;
 }
 void *bsearch(const void *key, const void *base, size_t nitems, size_t size, int (*compar)(const void *, const void *)) {
-    fprintf(stderr, "bsearch() is a stub\n");
-    exit(1);
+    while(nitems > 0) {
+        size_t mid = nitems / 2;
+        const void* ptr = (const char*)base + mid * size;
+        int cmp = compar(key, ptr);
+        if(cmp == 0) return (void*)ptr;
+        if(cmp < 0) {
+            nitems = mid;
+        } else {
+            base = (const char*)ptr + size;
+            nitems -= mid + 1;
+        }
+    }
+    return NULL;
 }
 
 char *mktemp(char *templat) {
-    fprintf(stderr, "mktemp() is a stub\n");
-    exit(1);
+    size_t len = strlen(templat);
+    if(len < 6) return NULL;
+    char* XXXXXX = templat + len - 6;
+    static unsigned int seed = 12345;
+    for(int i = 0; i < 6; i++) {
+        seed = seed * 1103515245 + 12345;
+        XXXXXX[i] = '0' + (seed >> 16) % 36;
+    }
+    if(XXXXXX[5] >= '0' && XXXXXX[5] <= '9') XXXXXX[5] = 'a' + (XXXXXX[5] - '0');
+    return templat;
+}
+
+int mkstemp(char *templat) {
+    mktemp(templat);
+    return open(templat, O_RDWR | O_CREAT | O_EXCL, 0600);
 }
 
 char *realpath(const char *path, char *resolved_path) {
-    fprintf(stderr, "realpath() is a stub\n");
-    exit(1);
+    if(!resolved_path) {
+        resolved_path = malloc(PATH_MAX);
+        if(!resolved_path) return NULL;
+    }
+    if(path[0] == '/') {
+        strcpy(resolved_path, path);
+    } else {
+        char cwd[PATH_MAX];
+        if(getcwd(cwd, sizeof(cwd)) == NULL) return NULL;
+        snprintf(resolved_path, PATH_MAX, "%s/%s", cwd, path);
+    }
+    // Simple cleanup: remove "." and ".." segments
+    char* src = resolved_path;
+    char* dst = resolved_path;
+    while(*src) {
+        if(src[0] == '/' && src[1] == '.' && (src[2] == '/' || src[2] == '\0')) {
+            src += 2;
+            continue;
+        }
+        if(src[0] == '/' && src[1] == '.' && src[2] == '.' && (src[3] == '/' || src[3] == '\0')) {
+            src += 3;
+            // Go back one directory
+            if(dst > resolved_path + 1) {
+                dst--;
+                while(dst > resolved_path + 1 && *(dst-1) != '/') dst--;
+            }
+            continue;
+        }
+        *dst++ = *src++;
+    }
+    *dst = '\0';
+    return resolved_path;
 }
 
 unsigned long strtoul(const char *nptr, char **endptr, int base) {
@@ -379,8 +441,7 @@ unsigned long long strtoull(const char *nptr, char **endptr, int base) {
 }
 
 double strtold(const char *nptr, char **endptr) {
-    fprintf(stderr, "strtold() is a stub\n");
-    exit(1);
+    return (double)strtod(nptr, endptr);
 }
 float strtof(const char *nptr, char **endptr) {
     float sign = 1.0f;
