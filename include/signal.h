@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 typedef void (*sighandler_t)(int);
 #define SIG_IGN NULL /*TODO: _sig_ign*/
 #define SIG_DFL NULL
