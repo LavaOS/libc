@@ -219,16 +219,17 @@ int main(int argc, char** argv) {
             const char* ar = getenv("AR");
             if(!ar) ar = "ar";
             cmd_append(&cmd, ar, "-cr", libc_a);
-            d = opendir(libc_dir);
-            if(d) {
-                while((ent = readdir(d))) {
-                    if(ent->d_name[0] == '.') continue;
-                    size_t len = strlen(ent->d_name);
-                    if(len > 2 && strcmp(ent->d_name + len - 2, ".o") == 0) {
-                        cmd_append(&cmd, nob_temp_sprintf("%s/%s", libc_dir, ent->d_name));
+            DIR* d2 = opendir(libc_dir);
+            if(d2) {
+                struct dirent* ent2;
+                while((ent2 = readdir(d2))) {
+                    if(ent2->d_name[0] == '.') continue;
+                    size_t len = strlen(ent2->d_name);
+                    if(len > 2 && strcmp(ent2->d_name + len - 2, ".o") == 0) {
+                        cmd_append(&cmd, nob_temp_sprintf("%s/%s", libc_dir, ent2->d_name));
                     }
                 }
-                closedir(d);
+                closedir(d2);
             }
             nob_cmd_run_sync_and_reset(&cmd);
         }
