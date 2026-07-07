@@ -18,11 +18,12 @@ static bool __environ_reserve(size_t extra) {
     return true;
 }
 static int environ_find_index(const char* name) {
-    if(name == NULL) return -1;
+    if(name == NULL || environ == NULL || __environ_size == 0) return -1;
     size_t namelen = strlen(name);
     for(size_t i = 0; i < __environ_size; ++i) {
+        if(!environ[i]) return -1;
         char* at = strchr(environ[i], '=');
-        if(at[0]=='\0') return -1;
+        if(!at) return -1;
         size_t e_namelen   = at-environ[i];
         if(namelen==e_namelen && memcmp(name, environ[i], namelen)==0) return i;
     }
@@ -61,7 +62,7 @@ char* getenv(const char* name) {
     int i = environ_find_index(name);
     if(i < 0) return NULL;
     char* at = strchr(environ[i], '=');
-    if(at[0] == '\0') return NULL;
+    if(!at) return NULL;
     return at+1;
 }
 void _libc_init_environ(const char** envp) {
