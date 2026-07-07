@@ -52,3 +52,13 @@ int truncate(const char* path, off_t size) {
 int execve(const char* pathname, char *const* argv, char *const* envp) {
     syscall(syscall3, SYS_EXEC, pathname, argv, envp);
 }
+int waitpid(pid_t pid, int* status, int options) {
+    (void)status;
+    (void)options;
+    intptr_t e = syscall1(SYS_WAITPID, pid);
+    if(e < 0) {
+        errno = _minos2errno(e);
+        return -1;
+    }
+    return (int)e;
+}

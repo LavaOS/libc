@@ -241,4 +241,18 @@ int main(int argc, char** argv) {
         cmd_append(&cmd, "cp", "-r", "include/.", temp_sprintf("%s/include/", rootdir));
         nob_cmd_run_sync_and_reset(&cmd);
     }
+
+    // Install CRT files to initrd/lib/crt/
+    if(rootdir) {
+        const char* crt_dest = temp_sprintf("%s/lib/crt", rootdir);
+        nob_mkdir_if_not_exists_silent(crt_dest);
+        const char* crt_src[] = { "start.o", "crti.o", "crtn.o", "crtbegin.o", "crtend.o" };
+        const char* crt_dst[] = { "crt1.o", "crti.o", "crtn.o", "crtbegin.o", "crtend.o" };
+        for(size_t i = 0; i < ARRAY_LEN(crt_src); ++i) {
+            const char* src = temp_sprintf("%s/crt/%s", bindir, crt_src[i]);
+            if(file_exists(src)) {
+                nob_copy_file(src, temp_sprintf("%s/%s", crt_dest, crt_dst[i]));
+            }
+        }
+    }
 }
