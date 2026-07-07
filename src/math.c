@@ -95,6 +95,50 @@ double tanh(double x) {
     double e2 = exp(2*x);
     return (e2 - 1) / (e2 + 1);
 }
+double sqrt(double x) {
+    if(x < 0) return 0;
+    if(x == 0) return 0;
+    double guess = x / 2.0;
+    for(int i = 0; i < 50; i++) {
+        guess = (guess + x / guess) / 2.0;
+    }
+    return guess;
+}
+double exp(double x) {
+    if(x == 0) return 1.0;
+    double sum = 1.0;
+    double term = 1.0;
+    for(int i = 1; i < 30; i++) {
+        term *= x / i;
+        sum += term;
+    }
+    return sum;
+}
+double ceil(double x) {
+    int i = (int)x;
+    return x > 0 && x != (double)i ? i + 1.0 : i;
+}
+double log(double x) {
+    if(x <= 0) return -1e308;
+    double result = 0;
+    int n = 0;
+    while(x > 2.0) { x /= 2.718281828459045; n++; }
+    while(x < 0.5) { x *= 2.718281828459045; n--; }
+    double y = (x - 1) / (x + 1);
+    double y2 = y * y;
+    double term = y;
+    for(int i = 1; i < 20; i++) {
+        result += term / (2 * i - 1);
+        term *= y2;
+    }
+    return result * 2.0 + n;
+}
+double log10(double x) {
+    return log(x) / 2.302585092994046;
+}
+double log2(double x) {
+    return log(x) / 0.6931471805599453;
+}
 float sinf(float f) {
     return (float)sin((double)f);
 }
