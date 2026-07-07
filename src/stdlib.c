@@ -196,6 +196,7 @@ void* realloc(void* addr, size_t newsize) {
     }
     // Reached limit
     assert(false && "Invalid address to realloc");
+    return NULL;
 }
 // TODO: Smarter free with heap_get() and checking heap ranges
 void free(void* addr) {
