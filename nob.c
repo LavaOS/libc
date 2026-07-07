@@ -171,5 +171,66 @@ int main(int argc, char** argv) {
             nob_temp_rewind(temp);
             return 1;
         }
-    } 
+    }
+
+    // Link libc.so from all object files
+    const char* libc_so = nob_temp_sprintf("%s/libc/libc.so", bindir);
+    {
+        cmd_append(&cmd, cc);
+        cmd_append(&cmd, "-shared", "-nostdlib", "-ffreestanding", "-fPIC");
+        cmd_append(&cmd, "-march=x86-64", "-mno-mmx", "-mno-sse", "-mno-sse2", "-mno-3dnow");
+        cmd_append(&cmd, "-Wl,--hash-style=sysv");
+        cmd_append(&cmd, "-o", libc_so);
+
+        // Collect all libc .o files
+        size_t temp = nob_temp_save();
+        const char* libc_dir = nob_temp_sprintf("%s/libc", bindir);
+        DIR* d = opendir(libc_dir);
+        if(!d) {
+            nob_log(NOB_ERROR, "Failed to open %s", libc_dir);
+            return 1;
+        }
+        struct dirent* ent;
+        while((ent = readdir(d))) {
+            if(ent->d_name[0] == '.') continue;
+            size_t len = strlen(ent->d_name);
+            if(len > 2 && strcmp(ent->d_name + len - 2, ".o") == 0) {
+                cmd_append(&cmd, nob_temp_sprintf("%s/%s", libc_dir, ent->d_name));
+            }
+        }
+        closedir(d);
+        nob_temp_rewind(temp);
+
+        if(!nob_cmd_run_sync_and_reset(&cmd)) return 1;
+
+        // Strip
+        cmd_append(&cmd, "strip", "-s", libc_so);
+        if(!nob_cmd_run_sync_and_reset(&cmd)) return 1;
+    }
+
+    // Install libc.so and libc.a to sysroot
+    const char* sysroot = nob_temp_sprintf("%s/usr/lib", nob_temp_sprintf("%s/sysroot", kroot));
+    if(nob_mkdir_if_not_exists_silent(sysroot)) {
+        nob_copy_file(libc_so, nob_temp_sprintf("%s/libc.so", sysroot));
+        const char* libc_a = nob_temp_sprintf("%s/libc.a", sysroot);
+
+        // Build libc.a (static archive)
+        {
+            const char* ar = getenv("AR");
+            if(!ar) ar = "ar";
+            cmd_append(&cmd, ar, "-cr", libc_a);
+            d = opendir(libc_dir);
+            if(d) {
+                while((ent = readdir(d))) {
+                    if(ent->d_name[0] == '.') continue;
+                    size_t len = strlen(ent->d_name);
+                    if(len > 2 && strcmp(ent->d_name + len - 2, ".o") == 0) {
+                        cmd_append(&cmd, nob_temp_sprintf("%s/%s", libc_dir, ent->d_name));
+                    }
+                }
+                closedir(d);
+            }
+            nob_cmd_run_sync_and_reset(&cmd);
+        }
+    }
 }
