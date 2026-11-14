@@ -183,22 +183,33 @@ int main(int argc, char** argv) {
         cmd_append(&cmd, "-Wl,--hash-style=sysv");
         cmd_append(&cmd, "-o", libc_so);
 
-        // Collect all libc .o files
+        // Collect all libc .o files (including subdirectories)
         size_t temp = nob_temp_save();
-        DIR* d = opendir(libc_dir);
-        if(!d) {
-            nob_log(NOB_ERROR, "Failed to open %s", libc_dir);
-            return 1;
-        }
-        struct dirent* ent;
-        while((ent = readdir(d))) {
-            if(ent->d_name[0] == '.') continue;
-            size_t len = strlen(ent->d_name);
-            if(len > 2 && strcmp(ent->d_name + len - 2, ".o") == 0) {
-                cmd_append(&cmd, nob_temp_sprintf("%s/%s", libc_dir, ent->d_name));
+        File_Paths obj_dirs = {0};
+        File_Paths obj_files = {0};
+        da_append(&obj_dirs, libc_dir);
+        for (size_t i = 0; i < obj_dirs.count; ++i) {
+            DIR* d = opendir(obj_dirs.items[i]);
+            if(!d) continue;
+            struct dirent* ent;
+            while((ent = readdir(d))) {
+                if(ent->d_name[0] == '.') continue;
+                const char* full = nob_temp_sprintf("%s/%s", obj_dirs.items[i], ent->d_name);
+                Nob_File_Type type = nob_get_file_type(full);
+                if (type == NOB_FILE_DIRECTORY) {
+                    da_append(&obj_dirs, full);
+                } else {
+                    size_t len = strlen(ent->d_name);
+                    if(len > 2 && strcmp(ent->d_name + len - 2, ".o") == 0) {
+                        da_append(&obj_files, full);
+                    }
+                }
             }
+            closedir(d);
         }
-        closedir(d);
+        for (size_t i = 0; i < obj_files.count; ++i) {
+            cmd_append(&cmd, obj_files.items[i]);
+        }
         nob_temp_rewind(temp);
 
         if(!nob_cmd_run_sync_and_reset(&cmd)) return 1;
